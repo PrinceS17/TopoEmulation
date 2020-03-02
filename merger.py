@@ -1,14 +1,6 @@
 '''
 This script is used to configure all RX bridges to connect to the same
-VM, i.e. "merge" all the flows. It will
-    1) configure the NIC of VM;
-    2) copy inVM.sh into VM;
-    3) run it to configure ip & route inside VM.
-    (Actually a subset of the top.py work.)
-
-TODO:
-1. known issue: number of NIC? might not be able support too many flows
-
+VM, i.e. "merge" all the flows. It will configure the NIC of VM.
 '''
 
 import os, sys, time
