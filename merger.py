@@ -20,7 +20,7 @@ def main():
     do_clear = False
 
     # parse the parameters
-    opts = {'-r':'0:9', '-m':'Right\\ linux', '-p':5000, '-b':'br'}
+    opts = {'-r':'0:9', '-m':'SingleSrc', '-p':5000, '-b':'br'}
     cur_opt = None
     for opt in sys.argv[1:]:
         if opt == '-clear':
@@ -70,13 +70,13 @@ def main():
         time.sleep(5)
 
 
-    # check inVM and set_iperf.py
+    # check btnk.sh and set_iperf.py
     assert os.getcwd().find('VM-Emulation') != -1
-    for name in ['inVM.sh', 'set_iperf.py']:
+    for name in ['btnk.sh', 'set_iperf.py']:
         sh_path = os.path.join(os.getcwd(), name)
         des_path = os.path.join('/home/right/', name)
         cmdor.copy_to_vm(vm, sh_path, des_path)
-        if name == 'inVM.sh':
+        if name == 'btnk.sh':
             cmdor.chmod(vm, '755', des_path)
     
     # # run inVM to configure ip and route inside
