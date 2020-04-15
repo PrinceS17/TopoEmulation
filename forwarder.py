@@ -16,7 +16,7 @@ def print_help():
 
 def main():
     # parse the parameters
-    opts = {'-r':'0:5', '-d':5000, '-p':5000, '-a':'44.230.75.72'}
+    opts = {'-r':'0:5', '-d':5000, '-p':5000, '-a':'0.0.0.0'}
 
     do_clear = False
     cur_opt = None
