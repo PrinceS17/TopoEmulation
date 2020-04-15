@@ -31,6 +31,7 @@ main or downstream link capacity, which is cool!
 #include <ctime>
 #include "ns3/ratemonitor-module.h"
 #include "ns3/brite-module.h"
+#include "ns3/minibox-module.h"
 
 #define vint vector<uint32_t>
 #define vdouble vector<double>
@@ -39,81 +40,6 @@ using namespace std;
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("BriteEmuHostVm");
-
-
-// parse the flow info file, store target flow, leaf BW and cross traffic
-void parseFlowInfo (uint32_t nFlow, string infoFile, vector<vint>& targetFlow, vint& leafBw, vector<vint>& crossTraffic)
-{
-    ifstream fin (infoFile, ios::in);
-    uint32_t src, des;
-    double bw;
-    vector<vint> tFlow, cTraffic;
-    vint lBw, tmp;
-    for (uint32_t i = 0; i < nFlow; i ++)
-    {
-        fin >> src >> des >> bw;
-        tmp = {src, des};
-        tFlow.push_back (tmp);
-        lBw.push_back (bw);
-    }
-    while (!fin.eof ())
-    {
-        src = -1;
-        des = -1;
-        fin >> src >> des;
-        if (src == 4294967295 || des == 4294967295) break;
-        tmp = {src, des};
-        cTraffic.push_back (tmp);
-    }
-    fin.close ();
-    targetFlow = tFlow;
-    leafBw = lBw;
-    crossTraffic = cTraffic;
-    NS_LOG_DEBUG (" - Flow info parsed, target flows:");
-    for (uint32_t i = 0; i < nFlow; i ++)
-        NS_LOG_DEBUG (" -- " << targetFlow[i][0] << " -> " << targetFlow[i][1] << ", " 
-            << leafBw[i] << " bps");
-    NS_LOG_DEBUG (" - Cross traffic, size of " << crossTraffic.size ());
-    for (uint32_t i = 0; i < crossTraffic.size (); i ++)
-        NS_LOG_DEBUG (" -- " << crossTraffic[i][0] << " -> " << crossTraffic[i][1]);
-}
-
-
-void parseBandwidth (string bwFile, vint& bws)
-{
-    ifstream fin (bwFile, ios::in);
-    vint tmp_bw;
-    int val;
-    while (!fin.eof ())
-    {
-        val = -1;
-        fin >> val;
-        if (val > 0) tmp_bw.push_back (uint32_t(val));
-        else break;
-    }
-    fin.close ();
-    bws = tmp_bw;
-    NS_LOG_DEBUG (" - BW info parsed.");
-    for (uint32_t i = 0; i < bws.size (); i ++)
-        NS_LOG_DEBUG (" -- " << bws[i] << " bps");   
-}
-
-
-void testLinkBandwidth (NetDeviceContainer dev, uint32_t bw, bool useP2p = false)
-{
-    NS_LOG_DEBUG ("-- " << Simulator::Now ().GetSeconds () << "s : Testing link bandwidth: " \
-        << bw << " bps expected..");
-    if (!useP2p)
-    {
-        Ptr<CsmaChannel> channel = DynamicCast<CsmaChannel> (dev.Get (0)->GetChannel ());
-        NS_ASSERT_MSG (channel->GetDataRate () == DataRate (bw), "Wrong channel rate!");
-    }
-    else
-    {
-        NS_LOG_DEBUG (" Note: expect BW of a point-to-point link: " << bw << " bps");
-    }
-}
-
 
 struct LinkChangeTool
 {
@@ -179,12 +105,16 @@ int main (int argc, char* argv[])
     uint32_t nSmall = 3;
     string tapLeft = "tap-left";
     string tapRight = "tap-right";
-    string infoFile = "flow_info_1234.txt";
+    string infoFile = "flow_info_0606.txt";
     string confFile = "brite_conf/TD_DefaultWaxman.conf";       // 100Mbps
     // string confFile = "brite_conf/TD_inter=220M_Waxman.conf";
     string bwFile = "bw_info.txt";
     bool changeBw = false;
     bool testFlow = false;
+
+    // support downstream cross traffic
+    uint32_t nDsForEach = 0;            // ds effectiveness test
+    uint32_t dsCrossRate = 30;
 
     CommandLine cmd;
     cmd.AddValue ("mid", "Run ID (4 digit)", mid);
@@ -202,6 +132,8 @@ int main (int argc, char* argv[])
     cmd.AddValue ("offset", "Off set of tap index", offset);
     cmd.AddValue ("nSmall", "Number of small flows", nSmall);
     cmd.AddValue ("testFlow", "Test mode of flow (ns3 flow instead of iperf)", testFlow);
+    // TODO: pass argument or write into file
+    cmd.AddValue ("nDsForEach", "Downstream flow num for each destination", nDsForEach);
     cmd.Parse (argc, argv);
     crossRate *= 1000000;
     edgeRate *= 1000000;
@@ -266,6 +198,16 @@ int main (int argc, char* argv[])
         else normalFlow.setLocalBridge (tapLeft + "-" + to_string(src), \
         tapRight + "-" + to_string(des));       // note: src != i
 
+
+
+
+        // // TODO: add direct stream for each, work with TAP or not?
+        // for (uint32_t j = 0; j < nDsForEach; j ++)
+        //     normalFlow.setOnoffByLink ("ds");
+
+
+
+
         leftAddr = normalFlow.getLeftAddr ();
         rightAddr = normalFlow.getRightAddr ();
         txEnds.Add (normalFlow.getHost (0));
@@ -276,7 +218,6 @@ int main (int argc, char* argv[])
     }
     NS_LOG_INFO ("-> Target flows set.");
 
-    // set up cross traffic: mainly not needed in host-vm scenario
     for (uint32_t i = 0; i < nCross; i ++)
     {
         uint32_t src = crossTraffic[i][0];
@@ -301,12 +242,11 @@ int main (int argc, char* argv[])
     for (uint32_t i = 0; i < nFlow + nCross; i ++)
     {
         vint id = {mid, i};
-        Ptr<RateMonitor> mon = CreateObject <RateMonitor, vint, bool> (id, true);
-        // Ptr<RateMonitor> mon = CreateObject <RateMonitor, vint, bool> (id, false);      // use phyRx here
-        
+        // Ptr<RateMonitor> mon = CreateObject <RateMonitor, vint, bool> (id, true);        // macRx doesn't work
+        Ptr<RateMonitor> mon = CreateObject <RateMonitor, vint, bool> (id, false);      // use macTx here
         mons.push_back (mon);
-        mon->install (rxEndDevices.Get (i));
-        // mon->install (txEndDevices.Get (i));         // test tx sending rate
+        mon->install (rxLeafDevices.Get (i));
+        // mon->install (txEndDevices.Get (i));         // test tx sending rate: doesn't quite work...
         mon->start (t0);
         mon->stop (t1);
         
@@ -317,7 +257,7 @@ int main (int argc, char* argv[])
     // change bandwidth given schedule, bandwidth
     vint vbw;
     parseBandwidth (bwFile, vbw);
-    double T = 20;
+    double T = 120;
     LinkChangeTool0 = LinkChangeTool (nFlow, nFlow + nCross - nSmall, T, vbw, rxLeafDevices, rxEndDevices);    
     if (changeBw) flowStartSink (true, true);
 

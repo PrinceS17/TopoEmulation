@@ -31,6 +31,7 @@ Note currently the leaf link should be hardcoded to CSMA for emulation.
 #include <ctime>
 #include "ns3/ratemonitor-module.h"
 #include "ns3/brite-module.h"
+#include "ns3/minibox-module.h"
 
 #define vint vector<uint32_t>
 #define vdouble vector<double>
@@ -39,43 +40,6 @@ using namespace std;
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("BriteForEmu");
-
-// parse the flow info file, store target flow, leaf BW and cross traffic
-void parseFlowInfo (uint32_t nFlow, string infoFile, vector<vint>& targetFlow, vint& leafBw, vector<vint>& crossTraffic)
-{
-    ifstream fin (infoFile, ios::in);
-    uint32_t src, des;
-    double bw;
-    vector<vint> tFlow, cTraffic;
-    vint lBw, tmp;
-    for (uint32_t i = 0; i < nFlow; i ++)
-    {
-        fin >> src >> des >> bw;
-        tmp = {src, des};
-        tFlow.push_back (tmp);
-        lBw.push_back (bw);
-    }
-    while (!fin.eof ())
-    {
-        src = -1;
-        des = -1;
-        fin >> src >> des;
-        if (src == 4294967295 || des == 4294967295) break;
-        tmp = {src, des};
-        cTraffic.push_back (tmp);
-    }
-    fin.close ();
-    targetFlow = tFlow;
-    leafBw = lBw;
-    crossTraffic = cTraffic;
-    NS_LOG_DEBUG (" - Flow info parsed, target flows:");
-    for (uint32_t i = 0; i < nFlow; i ++)
-        NS_LOG_DEBUG (" -- " << targetFlow[i][0] << " -> " << targetFlow[i][1] << ", " 
-            << leafBw[i] << " bps");
-    NS_LOG_DEBUG (" - Cross traffic, size of " << crossTraffic.size ());
-    for (uint32_t i = 0; i < crossTraffic.size (); i ++)
-        NS_LOG_DEBUG (" -- " << crossTraffic[i][0] << " -> " << crossTraffic[i][1]);
-}
 
 
 int main (int argc, char* argv[])
