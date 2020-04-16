@@ -7,32 +7,44 @@ TopoEmulation is a network emulation platform with VirtualBox VM, ns-3, and AWS 
 It combines the usage of simulated network and actual internet links to both control bottleneck link easily and involve the real network. 
 
 # How to Use
+Here take the integration test version as an example. Configuration can be changed in host-btnk_int.sh, btnk_int.sh.
+We want to create 12 flows in all.
+
 - Run forwarder and check the NAT rules in iptables:
 
 ```
-$ python3 forwarder.py -r 0:5 -a $server -d 5000 -p 5000
+$ python3 forwarder.py -r 0:11 -a $server -d 5000 -p 5000
 $ sudo iptables -t nat -L
 ```
 
 - Run splitter once (ns3 part will fail) to get the VM side bridges, then run merger to configure VM’s NIC:
 ```
-$ python3 splitter.py -r 0:10
-$ python3 merger.py -r 0:10 -m $VM -p 5000
+$ python3 splitter.py -r 0:11
+$ python3 merger.py -r 0:11 -m $VM -p 5000
 ```
 
 Note that larger max of the splitter range is okay if it's consistent with VM's NIC (the only consequence is that you waste some bridges).
 
 - Ensure all parties have the scripts they want;
   - Server: iperf_server.py
-  - Host: splitter, host-btnk.sh, CmdManager.py
-  - VM: btnk.sh, set_iperf.py
+  - Host: splitter, host-btnk.sh, host-btnk_int.sh, CmdManager.py
+  - VM: btnk_int.sh, btnk_apr.sh, set_iperf.py, clear_int.sh, set-routes.sh
 
-- Run host-btnk.sh on host (which will start ns-3 and iperf servers), then run btnk.sh in VM (will start iperf clients):
+- Run host-btnk_int.sh on host (which will start ns-3 and use splitter), then run btnk.sh in VM (will start iperf clients):
 ```
-Host: $ ./host-btnk.sh
-VM:   $ ./btnk.sh
+Host: $ ./host-btnk_int.sh
+Server: $ python3 iperf_server.py -r 0:11
+VM:   $ ./btnk_int.sh
 ```
-And it works if the terminal in VM begins outputting some statistics dynamically.
+
+Note that this will ensure the flows begin, but typically the fCoder and vAlloc scripts such as `athena` and `mercurius` also need to be on before emulation. It works if the terminal in VM begins outputting some statistics dynamically.
+
+You can use the following command to enable delayed entry of each flow:
+```
+VM:   $ ./btnk_apr.sh 1
+```
+It's done basically by enabling the `aync` option of set_iperf.py.
+
 
 # Architecture
 The platform includes iperf clients in a VirtualBox VM, a ns-3 simulated network and iperf servers on a remote AWS EC2 instance. To force the traffic to go through ns-3 network before reaching EC2, we send the iperf traffic to taps on host and then forward the traffic to remote server.
